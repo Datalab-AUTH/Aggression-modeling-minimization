@@ -1,0 +1,8 @@
+/venv/
+/out/
+/network/
+/data/
+/code_marinos/.idea/
+/code_marinos/data/
+/code_marinos/snapshots/
+/code_marinos/results/
