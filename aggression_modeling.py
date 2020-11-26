@@ -32,12 +32,14 @@ def run_experiment(g: nx.DiGraph, args, instance: int):
     # for strategies that need seed size we give 5594 as it was found via aggression threshold to return 8% of users.
     if args.strategy == 'aa':
         seeds = seed_selection.all_aggressive(g)
+    elif args.strategy == 'ta':
+        seeds = seed_selection.top_aggressive(g, args.seedsize)
     elif args.strategy == 'sd':
-        seeds = seed_selection.single_discount(g, 5594)
+        seeds = seed_selection.single_discount(g, args.seedsize)
     elif args.strategy == 'dd':
-        seeds = seed_selection.degree_discount(g, 5594)
+        seeds = seed_selection.degree_discount(g, args.seedsize)
     else:
-        seeds = seed_selection.random(g, 5594)
+        seeds = seed_selection.random(g, args.seedsize)
 
     if args.model == 'ic':
         activated, agg_scores = run_ic(g, seeds, args, instance)
@@ -80,34 +82,35 @@ if __name__ == '__main__':
                                             " needed for the various plots")
 
     simulation_parser = subparsers.add_parser('simulation', help='Simulation of an aggression diffusion process based on the given parameters')
-    simulation_parser.add_argument("graph", type=str, help="Path to graph pickle file")
-    simulation_parser.add_argument("snapshot", type=bool, help='If True, apart from the first and last step, it will create intermediate snapshots during the process')
-    simulation_parser.add_argument("strategy", type=str, choices=['r', 'aa', 'sd', 'dd'],
-                        help="Seed node selection strategy. Short names for 'Random', 'All aggressive', 'Single Discount' and 'Degree Discount'")
+    simulation_parser.add_argument("graph", choices=['data/graphs/Twitter_jaccard', 'data/graphs/Twitter_power', 'data/graphs/Twitter_weighted_overlap', 'data/graphs/Twitter_random'], type=str, help="Path to graph pickle file")
+    simulation_parser.add_argument("seedsize", type=int, help="Seed set size. It is the number of initial infected nodes. 5594 is the total number of aggressive users")
+    simulation_parser.add_argument("strategy", type=str, choices=['r', 'aa', 'ta', 'sd', 'dd'], help="Seed node selection strategy. Short names for 'Random', 'All aggressive', 'Single Discount' and 'Degree Discount'")
+    simulation_parser.add_argument("--snapshot", dest='snapshot', action='store_true', help='If True, apart from the first and last step, it will create intermediate snapshots during the process')
 
     sim_subparsers = simulation_parser.add_subparsers(dest='model')
 
     ic_parser = sim_subparsers.add_parser('ic', help='Simulation of an aggression diffusion process based on IC model')
-    ic_parser.add_argument('activation', type=str, choices=['random', 'top', 'cumulative'],
+    ic_parser.add_argument('--activation', default='cumulative', type=str, choices=['random', 'top', 'cumulative'],
                         help="Activation strategy during diffusion process")
-    ic_parser.add_argument('num_experiments', type=int, help='How many times to repeat an experiment. > 1 is suggested'
+    ic_parser.add_argument('--num_experiments', default=10, type=int, help='How many times to repeat an experiment. > 1 is suggested'
                                                               ' as IC is probabilistic')
 
     lt_parser = sim_subparsers.add_parser('lt', help='Simulation of an aggression diffusion process based on LT model')
-    lt_parser.add_argument('threshold', type=str, choices=['aggression', 'power'],
+    lt_parser.add_argument('--threshold', default='aggression', type=str, choices=['aggression', 'power', 'random'],
                         help="Node threshold strategy")
-    lt_parser.add_argument('num_experiments', type=int, help='How many times to repeat an experiment')
+    lt_parser.add_argument('--num_experiments', default=1, type=int, help='How many times to repeat an experiment')
 
 
     metrics_parser = subparsers.add_parser('metric', help='Metric calculation based on the snapshots produced by an'
                                                           ' aggression diffusion simulation experiment')
-    metrics_parser.add_argument('aggression_threshold', type=float,
+    metrics_parser.add_argument('--aggression_threshold', default=0.4, type=float,
                                 help="The threshold in [0,1] that determines when a user becomes aggressive."
                                 " An aggression score larger than the threshold means that the user is aggressive. Eg. = 0.4")
-    metrics_parser.add_argument('metric_type', type=str, choices=['similarity', 'aggression'],
+    metrics_parser.add_argument('--metric_type', default='similarity', type=str, choices=['similarity', 'aggression'],
                                 help="The type of metric to calculate, similarity metrics or aggression. "
                                      "'similarity' is suggested for aggression modeling experiment")
-
+    metrics_parser.add_argument("--seedsize", default=None, type=int, help="Seed set size. It is the number of initial infected nodes. 5594 is the total number of aggressive users")
+    metrics_parser.add_argument("--configuration", default=None, type=str, help="Specifies a single experiment to run metrics for")
     args = parser.parse_args()
     print()
     print(args)
@@ -115,7 +118,5 @@ if __name__ == '__main__':
     if args.mode == 'simulation':
         experiment(args, True)
     elif args.mode == 'metric':
-        at = args.aggression_threshold
-        mt = args.metric_type
-        calc_metrics(at, 'modeling', mt)
+        calc_metrics(args, 'modeling')
 

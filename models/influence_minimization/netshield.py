@@ -35,3 +35,38 @@ def net_shield(graph, k):
             del seeds[k:]
         temp_s += temp
     return seeds
+
+g = nx.read_gpickle('../../data/graphs/Twitter_jaccard')
+import utility
+g = nx.DiGraph(utility.insert_aggression(g, '../../../data/metrics.predictions.csv'))
+
+# NORMAL
+# nodes_to_remove = net_shield(g, 5594)
+# in_edges = list(g.in_edges(nodes_to_remove))
+# out_edges = list(g.out_edges(nodes_to_remove))
+
+
+# AGGRESSION
+graph = nx.DiGraph()
+for edge in tqdm(g.edges(data=True)):
+    u = edge[0]
+    v = edge[1]
+    agg_u = g.nodes[u]['aggression_score']
+    agg_v = g.nodes[v]['aggression_score']
+    graph.add_edge(u, v, weight=(agg_u * agg_v))
+nodes_to_remove = net_shield(graph, 5594)
+in_edges = list(graph.in_edges(nodes_to_remove))
+out_edges = list(graph.out_edges(nodes_to_remove))
+
+
+edges = list()
+edges.extend(in_edges)
+edges.extend(out_edges)
+
+#create an undirected graph to remove duplicate edges, as the initial graph was directed
+undirected = nx.Graph()
+undirected.add_edges_from(edges)
+
+print(len(in_edges), len(out_edges), len(edges), undirected.number_of_edges())
+
+#5594 nodes -> 476690 edges for normal adjacency

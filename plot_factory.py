@@ -11,36 +11,22 @@ import numpy as np
 import utility
 import os
 import random
-from heatmap import corrplot
+from cycler import cycler
 
-def min_blocking_evolution_plot(file='results/min_blocking_evolution.csv', save=False):
-    names = [str(i) for i in range(49)]  # dummy column names to avoid problem with csv reading
-    data = pd.read_csv(file, header=None, names=names)
+SMALL_SIZE = 12
+MEDIUM_SIZE = 14
+BIGGER_SIZE = 18
 
-    # Initialize the figure
-    plt.style.use('seaborn-darkgrid')
-    # create a color palette
-    palette = plt.get_cmap('Set1')
+plt.rc('font', size=MEDIUM_SIZE)  # controls default text sizes
+plt.rc('axes', titlesize=BIGGER_SIZE)  # fontsize of the axes title
+plt.rc('axes', labelsize=BIGGER_SIZE)  # fontsize of the x and y labels
+plt.rc('xtick', labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+plt.rc('ytick', labelsize=MEDIUM_SIZE)  # fontsize of the tick labels
+plt.rc('legend', title_fontsize= MEDIUM_SIZE) # legend title fontsize
+plt.rc('legend', fontsize=MEDIUM_SIZE)  # legend fontsize
+plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
-    num = 0
-    for idx, row in data.iterrows():
-        line_data = row.iloc[1:]
-        label = row.iloc[0]
-        plt.plot(line_data, color=palette(num), linewidth=1.9, alpha=0.9, label=label)
-        num += 1
-
-    plt.legend()
-    plt.xlabel('Steps')
-    plt.ylabel('Aggression Score')
-
-    plt.tight_layout()
-    if save:
-        plt.savefig('results/plots/evolutions/minimization/{}.png'.format(file[7:-4]), format='png',
-                    bbox_inches='tight')
-
-    plt.show()
-
-### NEW PLOTS ###
+monochrome = (cycler(color=[ '#000000', '#e66101', '#fdb863', '#b2abd2', '#5e3c99']) + cycler(linestyle=['-', 'dotted', '--', '-.', ':']) + cycler(marker=['d', '^', 'o', 'x', '.']))
 
 def get_dir_list(param, exp_type, model='ic'):
     dirs = os.listdir('snapshots/{}'.format(exp_type))
@@ -184,127 +170,292 @@ def plot_evolution(configuration, threshold=None, exp_type='modeling', metric_ty
     plt.show()
 
 
-def plot_evolution_best(save=False):
-    """
-    :param save: whether to save the plot or not
-    """
-    colors = ['#e66101', '#fdb863', '#5e3c99', '#b2abd2']
-    dirs = os.listdir('snapshots/modeling/ic_J_sd_c')
-    dirs2 = os.listdir('snapshots/modeling/lt_J_sd_a')
+def calc_stats(dirs, seedsize, configuration, metrics):
+
+    for metric in metrics:
+        if metric not in ['cosine', 'pearson', 'spearman', 'kendall']:
+            print('Invalid metric given')
+            return
 
     metric_dict = dict()
-    metric = 'Cosine Similarity'
     for directory in dirs:
-        filename = 'snapshots/modeling/ic_J_sd_c/{}/total_0.4.csv'.format(directory)
+        filename = 'snapshots/modeling/{}/{}/{}/total_0.4.csv'.format(seedsize, configuration, directory)
 
         df = pd.read_csv(filename, header=None)
 
-        cosines = df.iloc[0].iloc[1:]
+        for metric in metrics:
+            # take the actual values according to the specified metric
+            if metric == 'cosine':
+                values = df.iloc[0].iloc[1:]
+            elif metric == 'pearson':
+                values = df.iloc[1].iloc[1:]
+            elif metric == 'spearman':
+                values = df.iloc[2].iloc[1:]
+            else:
+                values = df.iloc[3].iloc[1:]
 
-        if metric in metric_dict.keys():
-            sum_values, col_frequencies = metric_dict[metric]
+            if metric in metric_dict.keys():
+                sum_values, col_frequencies = metric_dict[metric]
 
-            for idx, val in enumerate(cosines):
-                if len(sum_values) > idx:
-                    sum_values[idx] += val
-                    col_frequencies[idx] += 1
-                else:
+                for idx, val in enumerate(values):
+                    if len(sum_values) > idx:
+                        sum_values[idx] += val
+                        col_frequencies[idx] += 1
+                    else:
+                        sum_values.append(val)
+                        col_frequencies.append(1)
+                metric_dict.update({metric: (sum_values, col_frequencies)})
+            else:
+                sum_values = list()
+                col_frequencies = list()
+                for val in values:
                     sum_values.append(val)
                     col_frequencies.append(1)
-            metric_dict.update({metric: (sum_values, col_frequencies)})
-        else:
-            sum_values = list()
-            col_frequencies = list()
-            for val in cosines:
-                sum_values.append(val)
-                col_frequencies.append(1)
-            metric_dict.update({metric: (sum_values, col_frequencies)})
-
-    metric_dict2 = dict()
-    for directory in dirs2:
-        filename = 'snapshots/modeling/ic_J_sd_c/{}/total_0.4.csv'.format(directory)
-
-        df = pd.read_csv(filename, header=None)
-        cosines = df.iloc[0].iloc[1:]
-
-        if metric in metric_dict2.keys():
-            sum_values, col_frequencies = metric_dict2[metric]
-
-            for idx, val in enumerate(cosines):
-                if len(sum_values) > idx:
-                    sum_values[idx] += val
-                    col_frequencies[idx] += 1
-                else:
-                    sum_values.append(val)
-                    col_frequencies.append(1)
-            metric_dict2.update({metric: (sum_values, col_frequencies)})
-        else:
-            sum_values = list()
-            col_frequencies = list()
-            for val in cosines:
-                sum_values.append(val)
-                col_frequencies.append(1)
-            metric_dict2.update({metric: (sum_values, col_frequencies)})
+                metric_dict.update({metric: (sum_values, col_frequencies)})
 
     metric_means = dict()
     for metric in metric_dict.keys():
         mean_values = [val / freq for val, freq in zip(*metric_dict[metric])]
         metric_means.update({metric: mean_values})
 
-    metric_means2 = dict()
-    for metric in metric_dict2.keys():
-        mean_values = [val / freq for val, freq in zip(*metric_dict2[metric])]
-        metric_means2.update({metric: mean_values})
+    return metric_means
 
-    means1 = metric_means[metric]
-    means2 = metric_means2[metric]
 
-    fig, ax = plt.subplots()
+def plot_evolution_best(seedsize, save=False):
+    monochrome = (cycler(color=['#e66101', '#000000', '#fdb863', '#000000']) + cycler(
+        linestyle=['dotted', '-', 'dotted', '-']) + cycler(marker=['d', '^', 'd', '^']))
 
-    ticks = np.arange(0, len(means1))
-    ax.plot(ticks, means1, color=colors[0], label='ic_J_sd_c')
+    metrics = ['cosine', 'pearson', 'spearman', 'kendall']
+    dirs = os.listdir('snapshots/modeling/{}/ic_J_sd_c'.format(seedsize))
+    dirs2 = os.listdir('snapshots/modeling/{}/lt_J_sd_a'.format(seedsize))
+    dirs_base_ic = os.listdir('snapshots/modeling/{}/ic_R_r_r'.format(seedsize))
+    dirs_base_lt = os.listdir('snapshots/modeling/{}/lt_R_r_r'.format(seedsize))
 
-    ticks = np.arange(0, len(means2))
-    ax.plot(ticks, means2, color=colors[1], label='lt_J_sd_a')
+    means1 = calc_stats(dirs, seedsize, 'ic_J_sd_c', metrics)
+    means2 = calc_stats(dirs2, seedsize, 'lt_J_sd_a', metrics)
+    means_base_ic = calc_stats(dirs_base_ic, seedsize, 'ic_R_r_r', metrics)
+    means_base_lt = calc_stats(dirs_base_lt, seedsize, 'lt_R_r_r', metrics)
+
+    for metric in metrics:
+        if metric == 'cosine':
+            ytitle = 'Cosine Similarity'
+        elif metric == 'pearson':
+            ytitle = 'Pearson Correlation'
+        elif metric == 'spearman':
+            ytitle = 'Spearman Correlation'
+        else:
+            ytitle = 'Kendall Correlation'
+
+        # IC
+        fig, ax = plt.subplots(figsize=(6.4, 4))
+        ax.set_prop_cycle(monochrome)
+
+        ticks = np.arange(0, len(means1[metric]))
+        ax.plot(ticks, means1[metric], label='Best IC')
+        ticks = np.arange(0, len(means_base_ic[metric]))
+        ax.plot(ticks, means_base_ic[metric], label='Baseline IC')
+
+        plt.xlabel('Steps')
+        plt.ylabel(ytitle)
+        plt.legend(loc='best')
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))  # force integer x ticks
+        ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+        plt.tight_layout()
+        if save:
+            directory = 'results/plots/snapshots/modeling/'
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+            plt.savefig('{}/{}_{}_bestIC_0_4.png'.format(directory, seedsize, metric), format='png', bbox_inches='tight')
+        plt.show()
+
+        # LT
+        fig, ax = plt.subplots(figsize=(6.4, 4))
+        ax.set_prop_cycle(monochrome)
+
+        ticks = np.arange(0, len(means2[metric]))
+        ax.plot(ticks, means2[metric], label='Best LT')
+        ticks = np.arange(0, len(means_base_lt[metric]))
+        ax.plot(ticks, means_base_lt[metric], label='Baseline LT')
+
+        plt.xlabel('Steps')
+        plt.ylabel(ytitle)
+        plt.legend(loc='best')
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))  # force integer x ticks
+        ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+        plt.tight_layout()
+        if save:
+            directory = 'results/plots/snapshots/modeling/'
+            plt.savefig('{}/{}_{}_bestLT_0_4.png'.format(directory, seedsize, metric), format='png', bbox_inches='tight')
+        plt.show()
+# plot_evolution_best(5594, True)
+
+def plot_steps(save):
+    monochrome = (cycler(color=['#e66101', '#fdb863']) + cycler(
+        linestyle=['dotted', '-']) + cycler(marker=['d', '^']))
+
+    metrics = ['cosine']
+    dirs_a = os.listdir('snapshots/modeling/{}/ic_J_sd_c'.format(550))
+    dirs_b = os.listdir('snapshots/modeling/{}/ic_J_sd_c'.format(5594))
+    dirs_c = os.listdir('snapshots/modeling/{}/ic_J_sd_c'.format(10000))
+    dirs2_a = os.listdir('snapshots/modeling/{}/lt_J_sd_a'.format(550))
+    dirs2_b = os.listdir('snapshots/modeling/{}/lt_J_sd_a'.format(5594))
+    dirs2_c = os.listdir('snapshots/modeling/{}/lt_J_sd_a'.format(10000))
+
+    means1_a = calc_stats(dirs_a, 550, 'ic_J_sd_c', metrics)
+    means1_b = calc_stats(dirs_b, 5594, 'ic_J_sd_c', metrics)
+    means1_c = calc_stats(dirs_c, 10000, 'ic_J_sd_c', metrics)
+    means2_a = calc_stats(dirs2_a, 550, 'lt_J_sd_a', metrics)
+    means2_b = calc_stats(dirs2_b, 5594, 'lt_J_sd_a', metrics)
+    means2_c = calc_stats(dirs2_c, 10000, 'lt_J_sd_a', metrics)
+
+    fig, ax = plt.subplots(figsize=(6.4, 4))
+    ax.set_prop_cycle(monochrome)
+
+    ticks = np.arange(0, len(means1_a['cosine']))
+    ax.plot(ticks, means1_a['cosine'], label='IC')
+    ticks = np.arange(0, len(means2_a['cosine']))
+    ax.plot(ticks, means2_a['cosine'], label='LT')
 
     plt.xlabel('Steps')
-    plt.ylabel('Magnitude')
-    plt.legend(loc='best')
-
+    plt.ylabel('Cosine Similarity')
+    plt.legend(loc='best', title='Seed Size: 550')
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))  # force integer x ticks
     ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
-
     plt.tight_layout()
 
     if save:
-        directory = 'results/plots/snapshots/modeling/'
+        directory = 'results/plots/snapshots/steps/'
         if not os.path.exists(directory):
             os.makedirs(directory)
-        plt.savefig('{}/best_0_4.png'.format(directory), format='png', bbox_inches='tight')
+        plt.savefig('{}/{}_cosine.png'.format(directory, 550), format='png', bbox_inches='tight')
     plt.show()
 
 
-def min_evolution_plot(model, exp_type='minimization', save=False):
+    fig, ax = plt.subplots(figsize=(6.4, 4))
+    ax.set_prop_cycle(monochrome)
 
-    if exp_type == 'minimization':
-        param = 'healing'
-    else:
-        param = 'blocking'
+    ticks = np.arange(0, len(means1_b['cosine']))
+    ax.plot(ticks, means1_b['cosine'], label='IC')
+    ticks = np.arange(0, len(means2_b['cosine']))
+    ax.plot(ticks, means2_b['cosine'], label='LT')
 
-    # create a color palette
-    colors = ['#e66101', '#fdb863', '#b2abd2', '#5e3c99']
-    linestyles = ['-.', '--', '-', ':']
+    plt.xlabel('Steps')
+    plt.ylabel('Cosine Similarity')
+    plt.legend(loc='best', title='Seed Size: 5594')
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))  # force integer x ticks
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    plt.tight_layout()
 
-    if exp_type == 'blocking':
-        fig, axes = plt.subplots(nrows=1, ncols=1)
-    else:
-        fig, axes = plt.subplots(nrows=2, ncols=2, sharex=True, sharey=True)
+    if save:
+        directory = 'results/plots/snapshots/steps/'
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        plt.savefig('{}/{}_cosine.png'.format(directory, 5594), format='png', bbox_inches='tight')
+    plt.show()
 
-    dirs = get_dir_list(param, exp_type, model)
-    dirs = [dir_tuple for dir_tuple in dirs if model in dir_tuple[0]]
+    fig, ax = plt.subplots(figsize=(6.4, 4))
+    ax.set_prop_cycle(monochrome)
+
+    ticks = np.arange(0, len(means1_c['cosine']))
+    ax.plot(ticks, means1_c['cosine'], label='IC')
+    ticks = np.arange(0, len(means2_c['cosine']))
+    ax.plot(ticks, means2_c['cosine'], label='LT')
+
+    plt.xlabel('Steps')
+    plt.ylabel('Cosine Similarity')
+    plt.legend(loc='best', title='Seed Size: 10000')
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))  # force integer x ticks
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    plt.tight_layout()
+
+    if save:
+        directory = 'results/plots/snapshots/steps/'
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        plt.savefig('{}/{}_cosine.png'.format(directory, 10000), format='png', bbox_inches='tight')
+    plt.show()
+plot_steps(False)
+
+def agg_min_block_plot(save=False):
+    param = 'blocking'
+
+
+    dirs = get_dir_list(param, 'blocking', 'ic')
+    dirs = [dir_tuple for dir_tuple in dirs if 'ic' in dir_tuple[0]]
+    dirs_lt = get_dir_list(param, 'blocking', 'lt')
+    dirs_lt = [dir_tuple for dir_tuple in dirs_lt if 'lt' in dir_tuple[0]]
+    dirs.extend(dirs_lt)
+
     for idx, dir_tuple in enumerate(dirs):
-        if exp_type == 'minimization':
-            seed_strategy = dir_tuple[0].split('_')[2]  # eg 'aa'
+        fig, ax = plt.subplots()
+        ax.set_prop_cycle(monochrome)
+
+        if idx == 0:
+            directory = 'snapshots/modeling/ic_J_sd_c/0'
+            model = 'ic'
+        else:
+            directory = 'snapshots/modeling/lt_J_sd_a/0'
+            model = 'lt'
+        steps = os.listdir(directory)
+        steps = [step for step in steps if 'total' not in step]
+
+        no_heal_scores = list()
+        for step in steps:
+            no_heal_data_step = pd.read_csv('{}/{}'.format(directory, step), names=['User', 'Aggression Score'])
+            aggression_score = no_heal_data_step['Aggression Score'].sum()
+            no_heal_scores.append(aggression_score)
+        no_heal_scores_percent = [(x - no_heal_scores[idx]) / no_heal_scores[idx] * 100 for idx, x in enumerate(no_heal_scores)]
+
+        ax.plot(no_heal_scores_percent, color='black', alpha=0.9, label='No immunization')
+        ax.set_xticks(np.arange(0, len(no_heal_scores), 3))
+        ax.yaxis.set_major_formatter(mtick.PercentFormatter())
+
+
+        for index, directory in enumerate(dir_tuple):
+
+            splits = directory.split('_')
+            legend_label = '+'.join([splits[2], splits[-1]])
+            repeats = os.listdir('snapshots/blocking/{}'.format(directory))
+            for repeat in repeats:
+                filename = 'snapshots/blocking/{}/{}/total_aggressions.csv'.format(directory, repeat)
+                df = pd.read_csv(filename, header=None)
+                scores = df.iloc[0, 1:].tolist()
+                scores = [(x - no_heal_scores[idx])/no_heal_scores[idx] * 100 if idx < len(no_heal_scores) else (x - no_heal_scores[-1])/no_heal_scores[-1] * 100
+                          for idx, x in enumerate(scores)]
+
+                ax.plot(scores, linewidth=1.9, alpha=0.9,
+                                  label=legend_label)
+                ax.set_xticks(np.arange(0, len(scores), 3))
+                ax.yaxis.set_major_formatter(mtick.PercentFormatter())
+
+
+            ax.set_xlabel('Steps')
+            ax.set_ylabel('Aggression Score')
+            if model == 'ic':
+                ax.legend(loc='best',  frameon=False)
+
+        fig.tight_layout()
+        if save:
+            directory = 'results/plots/evolutions/'
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+
+            plt.savefig('{}/blocking_{}.png'.format(directory, model), format='png', bbox_inches='tight')
+        plt.show()
+# agg_min_block_plot(True)
+
+
+def agg_min_comp_plot(model, save):
+    param = 'healing'
+
+    dirs = get_dir_list(param, 'minimization', model)
+    dirs = [dir_tuple for dir_tuple in dirs if model in dir_tuple[0]]
+
+    for idx, dir_tuple in enumerate(dirs): # each dir_tuple a seed strategy
+        fig, ax = plt.subplots(figsize=(6.4, 4))
+        ax.set_prop_cycle(monochrome)
+
+        seed_strategy = dir_tuple[0].split('_')[2]  # eg 'aa'
 
         if model == 'ic':
             directory = 'snapshots/modeling/ic_J_sd_c/0'
@@ -319,79 +470,57 @@ def min_evolution_plot(model, exp_type='minimization', save=False):
             aggression_score = no_heal_data_step['Aggression Score'].sum()
             no_heal_scores.append(aggression_score)
         no_heal_scores_percent = [(x - no_heal_scores[idx]) / no_heal_scores[idx] * 100 for idx, x in enumerate(no_heal_scores)]
-        if idx == 0:
-            if exp_type == 'blocking':
-                axes.plot(no_heal_scores_percent, color='black', alpha=0.9, label='No immunization')
-            else:
-                axes[idx % 2, idx // 2].plot(no_heal_scores_percent, color='black', alpha=0.9, label='No healing')
-        else:
-            if exp_type == 'blocking':
-                axes.plot(no_heal_scores_percent, color='black', alpha=0.9)
-            else:
-                axes[idx % 2, idx // 2].plot(no_heal_scores_percent, color='black', alpha=0.9)
 
-        if exp_type == 'blocking':
-            axes.set_xticks(np.arange(0, len(no_heal_scores), 3))
-            axes.yaxis.set_major_formatter(mtick.PercentFormatter())
-        else:
-            axes[idx % 2, idx // 2].set_xticks(np.arange(0, len(no_heal_scores), 3))
-            axes[idx % 2, idx // 2].yaxis.set_major_formatter(mtick.PercentFormatter())
+        ax.plot(no_heal_scores_percent, alpha=0.9, label='No healing')
 
-        for index, directory in enumerate(dir_tuple):
-            if param == 'healing':
-                legend_label = directory.split('_')[-1]
+        ax.set_xticks(np.arange(0, len(no_heal_scores), 3))
+        ax.yaxis.set_major_formatter(mtick.PercentFormatter())
+
+        for index, directory in enumerate(dir_tuple): #each directory a healing strategy
+
+            legend_label = directory.split('_')[-1]
+            if legend_label == 'h':
+                legend_label = 'hybrid'
+            elif legend_label == 't':
+                legend_label = 'transfer'
+            elif legend_label == 'd':
+                legend_label = 'decaying'
             else:
-                splits = directory.split('_')
-                legend_label = '_'.join([splits[2], splits[-1]])
-            repeats = os.listdir('snapshots/{}/{}'.format(exp_type, directory))
+                legend_label = 'vaccination'
+
+            repeats = os.listdir('snapshots/minimization/{}'.format(directory))
             for repeat in repeats:
-                filename = 'snapshots/{}/{}/{}/total_aggressions.csv'.format(exp_type, directory, repeat)
+                filename = 'snapshots/minimization/{}/{}/total_aggressions.csv'.format(directory, repeat)
                 df = pd.read_csv(filename, header=None)
                 scores = df.iloc[0, 1:].tolist()
                 scores = [(x - no_heal_scores[idx])/no_heal_scores[idx] * 100 if idx < len(no_heal_scores) else (x - no_heal_scores[-1])/no_heal_scores[-1] * 100
                           for idx, x in enumerate(scores)]
-                if idx == 0:
-                    if exp_type == 'blocking':
-                        axes.plot(scores, color=colors[index], linestyle=linestyles[index], linewidth=1.9, alpha=0.9,
-                                  label=legend_label)
-                    else:
-                        axes[idx % 2, idx // 2].plot(scores, color=colors[index], linestyle=linestyles[index], linewidth=1.9, alpha=0.9,
-                                                 label=legend_label)
-                else:
-                    if exp_type == 'blocking':
-                        axes.plot(scores, color=colors[index], linestyle=linestyles[index], linewidth=1.9, alpha=0.9)
-                    else:
-                        axes[idx % 2, idx // 2].plot(scores, color=colors[index], linestyle=linestyles[index], linewidth=1.9, alpha=0.9)
 
-                if exp_type == 'minimization':
-                    axes[idx % 2, idx // 2].set_title(seed_strategy, loc='left', fontsize=12, fontweight=0)
+                ax.plot(scores, linewidth=1.9, alpha=0.9, label=legend_label)
 
-                if exp_type == 'blocking':
-                    axes.set_xticks(np.arange(0, len(scores), 3))
-                    axes.yaxis.set_major_formatter(mtick.PercentFormatter())
-                else:
-                    axes[idx % 2, idx // 2].set_xticks(np.arange(0, len(scores), 3))
-                    axes[idx % 2, idx // 2].yaxis.set_major_formatter(mtick.PercentFormatter())
+                ax.set_xticks(np.arange(0, len(scores), 3))
+                ax.yaxis.set_major_formatter(mtick.PercentFormatter())
 
+        ax.set_xlabel('Steps')
+        ax.set_ylabel('Aggression Score')
 
-    fig.text(0.5, 0.01, 'Steps', ha='center')
-    fig.text(0.01, 0.5, 'Aggression Score', va='center', rotation='vertical')
-    if exp_type == 'minimization':
-        title = 'Healing Strategies'
-        axes[0, 0].legend(title=title, loc='lower left', bbox_to_anchor=(0.0, 1.1), ncol=3, frameon=False)
-    else:
-        title = 'Strategies'
-        axes.legend(title=title, loc='lower left', bbox_to_anchor=(0.0, 1.1), ncol=3, frameon=False)
+        if idx == 0 and model == 'lt':
+            plt.rc('legend', fontsize=MEDIUM_SIZE)  # legend fontsize
+            ax.legend(loc='lower right', bbox_to_anchor=(1, 0.08))
+        elif idx == 2 and model == 'ic':
+            plt.rc('legend', fontsize=BIGGER_SIZE)  # legend fontsize
+            ax.legend(loc='lower right', bbox_to_anchor=(1, 0.08))
 
-    fig.tight_layout()
-    if save:
-        directory = 'results/plots/evolutions/'
-        if not os.path.exists(directory):
-            os.makedirs(directory)
+        fig.tight_layout()
+        if save:
+            directory = 'results/plots/evolutions/'
+            if not os.path.exists(directory):
+                os.makedirs(directory)
 
-        plt.savefig('{}/{}_{}.png'.format(directory, model, exp_type), format='png', bbox_inches='tight')
+            plt.savefig('{}/{}_minimization_{}.png'.format(directory, model, seed_strategy), format='png', bbox_inches='tight')
 
-    plt.show()
+        plt.show()
+# agg_min_comp_plot('ic', True)
 
 
 def plot_activations(model='ic', exp_type='modeling', plot_type='scatter', save=False):
@@ -454,18 +583,8 @@ def metric_cdf(param, threshold, metric, exp_type='modeling', save=False):
     :param metric: which metric to plot. Options: ['cosine', 'pearson', 'spearman']
     :param save: whether to save the plot or not
     """
-
-    SMALL_SIZE = 12
-    MEDIUM_SIZE = 14
-    BIGGER_SIZE = 18
-
-    plt.rc('font', size=SMALL_SIZE)  # controls default text sizes
-    plt.rc('axes', titlesize=SMALL_SIZE)  # fontsize of the axes title
-    plt.rc('axes', labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
-    plt.rc('xtick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
-    plt.rc('ytick', labelsize=SMALL_SIZE)  # fontsize of the tick labels
-    plt.rc('legend', fontsize=SMALL_SIZE)  # legend fontsize
-    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+    monochrome = (cycler(color=['#e66101', '#fdb863', '#b2abd2', '#5e3c99', '#000000']) + cycler(
+        linestyle=['-', 'dotted', '--', '-.', ':']) + cycler(marker=['d', '^', 'o', 'x', '.']))
 
     dir_list = get_dir_list(param, exp_type)
     if not dir_list:
@@ -488,27 +607,56 @@ def metric_cdf(param, threshold, metric, exp_type='modeling', save=False):
                 convergence_values.append(convergence_value)
             exp_metric_dict.update({experiment: convergence_values})
 
-        colors = ['#e66101', '#fdb863', '#b2abd2', '#5e3c99']
-        idx = 0
+        fig, ax = plt.subplots(figsize=(6.4, 4))
+        ax.set_prop_cycle(monochrome)
 
         for experiment, values in exp_metric_dict.items():
             values.sort()  # sort values
             s = float(sum(values))
             cdf = np.cumsum(values) / s  # calculate cdf
-            plt.plot(values, cdf, label=experiment, color=colors[idx])
-            idx += 1
-        plt.legend(loc='best')
-        plt.title('Threshold={}'.format(threshold))
-        plt.ylabel('CDF')
+
+            legend_label = None
+            if param == 'seed strategy':
+                if '_aa_' in experiment:
+                    legend_label = "All Aggressive"
+                elif '_r_' in experiment:
+                    legend_label = "Random"
+                elif '_sd_' in experiment:
+                    legend_label = "Single Discount"
+                else:
+                    legend_label = "Degree Discount"
+                title = 'Seed Strategy:'
+            elif param == 'graph':
+                if '_P_' in experiment:
+                    legend_label = 'Power score'
+                elif '_W_' in experiment:
+                    legend_label = 'Weighted overlap'
+                else:
+                    legend_label = 'Jaccard overlap'
+                title = 'Weighting Scheme:'
+            else:
+                if '_c' in experiment:
+                    legend_label = 'Cumulative'
+                elif '_r' in experiment:
+                    legend_label = 'Random'
+                else:
+                    legend_label = 'Top'
+
+            ax.plot(values, cdf, label=legend_label)
+
+        ax.set_ylabel('CDF')
         if metric == 'cosine':
-            plt.xlabel('Cosine Similarity')
+            ax.set_xlabel('Cosine Similarity')
         elif metric == 'pearson':
-            plt.xlabel('Pearson R')
+            ax.set_xlabel('Pearson R')
         elif metric == 'spearman':
-            plt.xlabel('Spearman R')
+            ax.set_xlabel('Spearman R')
         else:
             return
-        plt.tight_layout()
+
+        plt.xticks(rotation=30)
+
+        fig.tight_layout()
         if save:
             directory = 'results/plots/cdfs/{}'.format(param)
             if not os.path.exists(directory):
@@ -524,16 +672,21 @@ def metric_cdf(param, threshold, metric, exp_type='modeling', save=False):
                 string_to_write = t[0][3:7]
             else:
                 return
-            plt.xticks(rotation=30)
-            plt.savefig('{}/{}_{}_{}.png'.format(directory, string_to_write, metric, threshold), format='png', bbox_inches='tight')
+
+            if 'J_t' in string_to_write or 'sd_c' in string_to_write or 'J_sd' in string_to_write:
+                ax.legend(title=title, loc='best')
+            fig.savefig('{}/{}_{}_{}.png'.format(directory, string_to_write, metric, threshold), format='png', bbox_inches='tight')
         plt.show()
+# metric_cdf('graph', 0.4, 'cosine', exp_type='modeling', save=True)
+# metric_cdf('seed strategy', 0.4, 'cosine', exp_type='modeling', save=True)
+# metric_cdf('activation', 0.4, 'cosine', exp_type='modeling', save=True)
 
 
 def significance_plot(param, threshold, metric, exp_type='modeling', save=False):
     """
     :param exp_type: type of experiment
     :param param: which parameter to plot. Options: ['graph', 'seed strategy', 'activation']
-    :param threshold: for which threshold to plot metrics. Options: [0.05, 0.1, 0.2, 0.5, 0.9]
+    :param threshold: for which threshold to plot metrics. Options: [0.1,..., 0.9]
     :param metric: which metric to plot. Options: ['cosine', 'pearson', 'spearman']
     :param save: whether to save the plot or not
     """
@@ -583,7 +736,7 @@ def significance_plot(param, threshold, metric, exp_type='modeling', save=False)
 
         # calculate an overall statitistics table and watch f-statistic and p-value to see if there is significance
         results = ols('value ~ C(experiment)', data=df).fit()
-        print(results.summary())
+        # print(results.summary())
         # aov_table = sm.stats.anova_lm(results, typ=2)
         # print(utility.anova_table(aov_table))
 
@@ -678,36 +831,3 @@ def lt_metrics(threshold, metric, exp_type='modeling', save=False):
         plt.savefig('{}/{}_comparison_{}.png'.format(directory, metric, threshold), format='png',
                     bbox_inches='tight')
     plt.show()
-
-
-# configurations = os.listdir('snapshots/modeling')
-# for configuration in configurations:
-#     plot_evolution(configuration, threshold=0.4, exp_type='modeling', metric_type='similarity', save=True)
-
-plot_evolution_best(save=True)
-
-# configurations = os.listdir('snapshots/minimization')
-# for configuration in configurations:
-#     plot_evolution(configuration, threshold=None, exp_type='minimization', metric_type='aggression', save=True)
-
-
-# for threshold in [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.2, 0.1]:
-#     for metric in ['cosine', 'pearson', 'spearman']:
-#         lt_metrics(threshold, metric, 'modeling', False)
-
-
-# for param in ['graph', 'seed strategy', 'activation']:
-#     for threshold in [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.2, 0.1]:
-#         for metric in ['cosine', 'pearson', 'spearman']:
-#             metric_cdf(param, threshold, metric, exp_type='modeling', save=True)
-
-# for param in ['graph', 'seed strategy', 'activation']:
-#     for threshold in [0.4]:
-#         for metric in ['cosine', 'pearson', 'spearman']:
-#             significance_plot(param, threshold, metric, exp_type='modeling', save=False)
-
-
-# for m in ['ic', 'lt']:
-#     for t in ['minimization', 'blocking']:
-#         plot_activations(model=m, exp_type=t, plot_type='bar', save=True)
-#         min_evolution_plot(model=m, exp_type=t, save=True)

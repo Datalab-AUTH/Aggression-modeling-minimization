@@ -52,11 +52,11 @@ def run_experiment(g: nx.DiGraph, args, instance: int):
     if args.seedstrategy == 'aa':
         negative_seeds = seed_selection.all_aggressive(g)
     elif args.seedstrategy == 'sd':
-        negative_seeds = seed_selection.single_discount(g, 5594)
+        negative_seeds = seed_selection.single_discount(g, args.seedsize)
     elif args.seedstrategy == 'dd':
-        negative_seeds = seed_selection.degree_discount(g, 5594)
+        negative_seeds = seed_selection.degree_discount(g, args.seedsize)
     else:
-        negative_seeds = seed_selection.random(g, 5594)
+        negative_seeds = seed_selection.random(g, args.seedsize)
 
     if args.model == 'ic':
         activated, agg_scores = run_ic(g, negative_seeds, args, instance, 'blocking')
@@ -102,7 +102,7 @@ if __name__ == '__main__':
     simulation_parser = subparsers.add_parser('simulation', help="Simulation of a blocking aggression minimization process based on the given parameters. The negative cascade uses the best configuration found during the author's experimental process. If this needs to be changed, the code has to be altered")
     simulation_parser.add_argument("graph", type=str, help="Path to graph pickle file")
     simulation_parser.add_argument("snapshot", type=bool, help='If True, apart from the first and last step, it will create intermediate snapshots during the process')
-    simulation_parser.add_argument("seedsize", type=int, help='The seed set size. That is, the number of nodes or edges that the blocking mechanism will remove')
+    simulation_parser.add_argument("seedsize", type=int, help='The seed set size. That is, the number of nodes or edges that the blocking mechanism will remove. Also it is the number of initially infected nodes by the cascade. 5594 is the total number of aggressive users')
     simulation_parser.add_argument("strategy", type=str, choices=['node', 'edge'], help="Whether to remove nodes or edges. Node removal is more intrusive")
     simulation_parser.add_argument("adjacency", type=str, choices=['normal', 'aggression'], help="Type of adjacency. Normal adjacency leads to abusive node or edge detection, while aggression adjacency is fine-tuned towards aggression detection")
     simulation_parser.add_argument("seedstrategy", type=str, choices=['r', 'aa', 'sd', 'dd'], help="Seed node selection strategy. Short names for 'Random', 'All aggressive', 'Single Discount' and 'Degree Discount'")
@@ -129,6 +129,4 @@ if __name__ == '__main__':
     if args.mode == 'simulation':
         experiment(args, False)
     elif args.mode == 'metric':
-        at = args.aggression_threshold
-        mt = args.metric_type
-        calc_metrics(at, 'blocking', mt)
+        calc_metrics(args, 'blocking')

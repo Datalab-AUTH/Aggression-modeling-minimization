@@ -10,69 +10,85 @@ import os
 import glob
 
 
-def calc_metrics(agg_score_threshold=0.5, exp_type='modeling', metric_type='similarity'):
+def calc_metrics(args, exp_type='modeling'):
+    agg_score_threshold = args.aggression_threshold
+    metric_type = args.metric_type
+    configuration = args.configuration
+    seedsize = args.seedsize
 
     # the different configurations
     folders = [f for f in glob.glob('snapshots/{}/**'.format(exp_type), recursive=False)]
-    configs = [f.split('\\')[1] for f in folders]
 
-    repeats = dict()
-    for config in configs:
-        folders = [f for f in glob.glob('snapshots/{}/{}/**'.format(exp_type, config), recursive=False)]
-        repeats.update({config: len(folders)})
+    if seedsize: # if a specific seed size is given then search only for this one
+        seed_sizes = [seedsize]
+    else:
+        seed_sizes = [f.split('\\')[1] for f in folders]
 
-    trace = dict()  # (config: {repeat_i: num_of_steps_in_repeat_i, ...}) items
-    for config in configs:
-        steps_per_repeat = dict()
-        for i in range(repeats[config]):
-            step_files = [f for f in glob.glob('snapshots/{}/{}/{}/*.csv'.format(exp_type, config, i), recursive=False)
-                          if 'total' not in f]
-            steps_per_repeat.update({i: len(step_files)})
-        trace.update({config: steps_per_repeat})
-
-    for config in tqdm(trace.keys()):  # eg. 'ic_J_r_r'
-        if '_J_' in config:
-            graph = nx.read_gpickle('data/graphs/Twitter_jaccard')
-        elif '_P_' in config:
-            graph = nx.read_gpickle('data/graphs/Twitter_power')
+    for seed_size in seed_sizes:
+        if configuration: # if a specific configuration is given then search only for this one
+            configs = [configuration]
         else:
-            graph = nx.read_gpickle('data/graphs/Twitter_weighted_overlap')
-        graph = utility.insert_aggression(graph)
+            configs = [f.split('\\')[1] for f in glob.glob('snapshots/{}/{}/**'.format(exp_type, seed_size), recursive=False)]
 
-        repeats = trace[config].keys()
-        if metric_type == 'similarity':
-            for repeat in tqdm(repeats):  # eg 0
-                cosines = list()
-                pearsons = list()
-                spearmans = list()
-                kendalls = list()
+        repeats = dict()
+        for config in configs:
+            folders = [f for f in glob.glob('snapshots/{}/{}/{}/**'.format(exp_type, seed_size, config), recursive=False)]
+            repeats.update({config: len(folders)})
 
-                steps = trace[config][repeat]
-                for step in range(1, steps):  # First step is skipped because validation vector is calculated on intervals
-                    prev_snapshot = '{}/{}/{}.csv'.format(config, repeat, step-1)
-                    current_snapshot = '{}/{}/{}.csv'.format(config, repeat, step)
+        trace = dict()  # (config: {repeat_i: num_of_steps_in_repeat_i, ...}) items
+        for config in configs:
+            steps_per_repeat = dict()
+            for i in range(repeats[config]):
+                step_files = [f for f in glob.glob('snapshots/{}/{}/{}/{}/*.csv'.format(exp_type, seed_size, config, i), recursive=False)
+                              if 'total' not in f]
+                steps_per_repeat.update({i: len(step_files)})
+            trace.update({config: steps_per_repeat})
 
-                    val_vector = calc_validation_vector(graph, prev_snapshot, current_snapshot, agg_score_threshold, exp_type)
-                    cosine, pearson, spearman, kendall = calc_metrics_for_vector('../data/vectors/vectors_new', val_vector)
+        for config in tqdm(trace.keys()):  # eg. 'ic_J_r_r'
+            if '_J_' in config:
+                graph = nx.read_gpickle('data/graphs/Twitter_jaccard')
+            elif '_P_' in config:
+                graph = nx.read_gpickle('data/graphs/Twitter_power')
+            elif '_W_' in config:
+                graph = nx.read_gpickle('data/graphs/Twitter_weighted_overlap')
+            else:
+                graph = nx.read_gpickle('data/graphs/Twitter_random')
+            graph = utility.insert_aggression(graph)
 
-                    cosines.append(cosine)
-                    pearsons.append(pearson)
-                    spearmans.append(spearman)
-                    kendalls.append(kendall)
+            repeats = trace[config].keys()
+            if metric_type == 'similarity':
+                for repeat in tqdm(repeats):  # eg 0
+                    cosines = list()
+                    pearsons = list()
+                    spearmans = list()
+                    kendalls = list()
 
-                utility.write_metrics(config, repeat, cosines, pearsons, spearmans, kendalls, agg_score_threshold, exp_type)
-        elif metric_type == 'aggression':
-            for repeat in tqdm(repeats):
-                aggression_scores = list()
-                steps = trace[config][repeat]
-                for step in range(steps):
-                    snapshot = '{}/{}/{}.csv'.format(config, repeat, step)
-                    data = pd.read_csv('snapshots/{}/{}'.format(exp_type, snapshot), names=['User', 'Aggression Score'])
-                    aggression_score = data['Aggression Score'].sum()
-                    aggression_scores.append(aggression_score)
-                utility.write_aggressions(config, repeat, aggression_scores, exp_type)
-        else:
-            return
+                    steps = trace[config][repeat]
+                    for step in range(1, steps):  # First step is skipped because validation vector is calculated on intervals
+                        prev_snapshot = '{}/{}/{}/{}.csv'.format(seed_size, config, repeat, step-1)
+                        current_snapshot = '{}/{}/{}/{}.csv'.format(seed_size, config, repeat, step)
+
+                        val_vector = calc_validation_vector(graph, prev_snapshot, current_snapshot, agg_score_threshold, exp_type)
+                        cosine, pearson, spearman, kendall = calc_metrics_for_vector('../data/vectors/vectors_new', val_vector)
+
+                        cosines.append(cosine)
+                        pearsons.append(pearson)
+                        spearmans.append(spearman)
+                        kendalls.append(kendall)
+
+                    utility.write_metrics(config, repeat, cosines, pearsons, spearmans, kendalls, agg_score_threshold, exp_type, seed_size)
+            elif metric_type == 'aggression':
+                for repeat in tqdm(repeats):
+                    aggression_scores = list()
+                    steps = trace[config][repeat]
+                    for step in range(steps):
+                        snapshot = '{}/{}/{}/{}.csv'.format(seed_size, config, repeat, step)
+                        data = pd.read_csv('snapshots/{}/{}'.format(exp_type, snapshot), names=['User', 'Aggression Score'])
+                        aggression_score = data['Aggression Score'].sum()
+                        aggression_scores.append(aggression_score)
+                    utility.write_aggressions(config, repeat, aggression_scores, exp_type, seed_size)
+            else:
+                return
 
 
 def find_aggressive(snapshot, agg_score_threshold, exp_type):
@@ -281,7 +297,7 @@ def take_snapshot(graph, args, instance, step, exp_type='modeling'):
     else:
         return
 
-    directory = 'snapshots/{}/{}/{}'.format(exp_type, config, instance)
+    directory = 'snapshots/{}/{}/{}/{}'.format(exp_type, args.seedsize, config, instance)
     if not os.path.exists(directory):
         os.makedirs(directory)
 
@@ -298,6 +314,10 @@ def calc_metrics_for_vector(ground_truth_file, val_vector):
         vector_str = lines[-1]
         vector_str = vector_str[1:-1]
         vector = [float(x.strip()) for x in vector_str.split(',')]  # split in comma, remove whitespace,turn into float
+
+        # indices = [0,2,6,10] # remove sensitive elements from the proposed validation vector
+        # val_vector = [x for i, x in enumerate(val_vector) if i not in indices]
+        # vector = [x for i, x in enumerate(vector) if i not in indices]
 
         cosine_sim = dot(val_vector, vector) / (norm(vector)*norm(val_vector))
         pearson = stats.pearsonr(val_vector, vector)[0]  # high pearson (+1 or -1) means linear correlation

@@ -151,8 +151,10 @@ def create_config_string(row=None, args=None, blocking=False):
         config = '_'.join([config, 'P'])
     elif 'jaccard' in graph:
         config = '_'.join([config, 'J'])
-    else:
+    elif 'weighted' in graph:
         config = '_'.join([config, 'W'])
+    else:
+        config = '_'.join([config, 'R'])
 
     if blocking:
         seed_strategy = row['Block Type'] if not args else args.strategy
@@ -174,8 +176,10 @@ def create_config_string(row=None, args=None, blocking=False):
 
         if threshold == 'aggression':
             config = '_'.join([config, 'a'])
-        else:
+        elif threshold == 'power':
             config = '_'.join([config, 'p'])
+        else:
+            config = '_'.join([config, 'r'])
     if blocking:
         if args:
             config = '_'.join([config, args.adjacency])
@@ -200,8 +204,10 @@ def create_config_string_min_competitive(row=None, args=None):
         config = '_'.join([config, 'P'])
     elif 'jaccard' in graph:
         config = '_'.join([config, 'J'])
-    else:
+    elif 'weighted' in graph:
         config = '_'.join([config, 'W'])
+    else:
+        config = '_'.join([config, 'R'])
 
 
     seed_strategy = row['Seed Strategy'] if not args else args.strategy
@@ -227,27 +233,39 @@ def write_to_csv_modeling(config, activated, i_agg, f_agg, total_time):
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-    filename = '{}/total_{}.csv'.format(directory, config.csvindex)
+    filename = '{}/total.csv'.format(directory)
     file_exists = os.path.isfile(filename)
 
     with open(filename, mode='a', newline='') as file:
-        headers = ['Graph', 'Seed Strategy', 'Diffusion Model',
+        headers = ['Graph', 'Seed Size', 'Seed Strategy', 'Diffusion Model',
                    'Activation Strategy', 'Threshold Strategy', 'Activated Nodes',
                    'Initial Aggression Score', 'Final Aggression Score', 'Total Time']
         writer = csv.DictWriter(file, delimiter=',', fieldnames=headers)
 
         if not file_exists:
             writer.writeheader()
-
-        writer.writerow({'Graph': config.graph,
-                         'Seed Strategy': config.strategy,
-                         'Diffusion Model': config.model,
-                         'Activation Strategy': config.activation,
-                         'Threshold Strategy': config.threshold,
-                         'Activated Nodes': activated,
-                         'Initial Aggression Score': i_agg,
-                         'Final Aggression Score': f_agg,
-                         'Total Time': total_time})
+        if config.model == 'ic':
+            writer.writerow({'Graph': config.graph,
+                             'Seed Size': config.seedsize,
+                             'Seed Strategy': config.strategy,
+                             'Diffusion Model': config.model,
+                             'Activation Strategy': config.activation,
+                             'Threshold Strategy': '-',
+                             'Activated Nodes': activated,
+                             'Initial Aggression Score': i_agg,
+                             'Final Aggression Score': f_agg,
+                             'Total Time': total_time})
+        else:
+            writer.writerow({'Graph': config.graph,
+                             'Seed Size': config.seedsize,
+                             'Seed Strategy': config.strategy,
+                             'Diffusion Model': config.model,
+                             'Activation Strategy': '-',
+                             'Threshold Strategy': config.threshold,
+                             'Activated Nodes': activated,
+                             'Initial Aggression Score': i_agg,
+                             'Final Aggression Score': f_agg,
+                             'Total Time': total_time})
 
     return
 
@@ -260,7 +278,7 @@ def write_to_csv_min_competitive(config, n_activated, p_activated, i_agg, f_agg,
         os.makedirs('results/competitive')
 
     with open(filename, mode='a', newline='') as file:
-        headers = ['Graph', 'Seed Strategy', 'Model', 'Healing Strategy', 'Negative Activated Nodes',
+        headers = ['Graph', 'Seed Size', 'Seed Strategy', 'Model', 'Healing Strategy', 'Negative Activated Nodes',
                    'Positive Activated Nodes', 'Initial Aggression Score', 'Final Aggression Score', 'Total Time']
         writer = csv.DictWriter(file, delimiter=',', fieldnames=headers)
 
@@ -268,6 +286,7 @@ def write_to_csv_min_competitive(config, n_activated, p_activated, i_agg, f_agg,
             writer.writeheader()
 
         writer.writerow({'Graph': config.graph,
+                         'Seed Size': config.seedsize,
                          'Seed Strategy': config.strategy,
                          'Model': config.model,
                          'Healing Strategy': config.healing,
@@ -296,25 +315,40 @@ def write_to_csv_min_blocking(config, activated, i_agg, f_agg, total_time):
         if not file_exists:
             writer.writeheader()
 
-        writer.writerow({'Graph': config.graph,
-                         'Seed Size': config.seedsize,
-                         'Block Type': config.strategy,
-                         'Adjacency Type': config.adjacency,
-                         'Seed Strategy': config.seedstrategy,
-                         'Diffusion Model': config.model,
-                         'Activation Strategy': config.activation,
-                         'Threshold Strategy': config.threshold,
-                         'Activated Nodes': activated,
-                         'Initial Aggression Score': i_agg,
-                         'Final Aggression Score': f_agg,
-                         'Total Time': total_time})
+        if config.model == 'ic':
+            writer.writerow({'Graph': config.graph,
+                             'Seed Size': config.seedsize,
+                             'Block Type': config.strategy,
+                             'Adjacency Type': config.adjacency,
+                             'Seed Strategy': config.seedstrategy,
+                             'Diffusion Model': config.model,
+                             'Activation Strategy': config.activation,
+                             'Threshold Strategy': '-',
+                             'Activated Nodes': activated,
+                             'Initial Aggression Score': i_agg,
+                             'Final Aggression Score': f_agg,
+                             'Total Time': total_time})
+        else:
+            writer.writerow({'Graph': config.graph,
+                             'Seed Size': config.seedsize,
+                             'Block Type': config.strategy,
+                             'Adjacency Type': config.adjacency,
+                             'Seed Strategy': config.seedstrategy,
+                             'Diffusion Model': config.model,
+                             'Activation Strategy': '-',
+                             'Threshold Strategy': config.threshold,
+                             'Activated Nodes': activated,
+                             'Initial Aggression Score': i_agg,
+                             'Final Aggression Score': f_agg,
+                             'Total Time': total_time})
 
     return
 
 
-def write_metrics(config, repeat, cosines, pearsons, spearmans, kendalls, agg_score_threshold, exp_type='modeling'):
+def write_metrics(config, repeat, cosines, pearsons, spearmans, kendalls, agg_score_threshold, exp_type='modeling', seed_size=5594):
     """
     Writes three lines in a csv. First is about cosine similarity, second pearson R and third spearman R
+    :param seed_size: the size of the initial seed set
     :param exp_type: type of experiment
     :param agg_score_threshold: aggression score threshold
     :param config: the configuration
@@ -324,7 +358,7 @@ def write_metrics(config, repeat, cosines, pearsons, spearmans, kendalls, agg_sc
     :param spearmans: list of spearman similarities
     :param kendalls: list of kendall similarities
     """
-    filename = 'snapshots/{}/{}/{}/total_{}.csv'.format(exp_type, config, repeat, agg_score_threshold)
+    filename = 'snapshots/{}/{}/{}/{}/total_{}.csv'.format(exp_type, seed_size, config, repeat, agg_score_threshold)
     if os.path.exists(filename):
         os.remove(filename)
 
@@ -346,15 +380,16 @@ def write_metrics(config, repeat, cosines, pearsons, spearmans, kendalls, agg_sc
         wr.writerow(new_kendalls)
 
 
-def write_aggressions(config, repeat, aggressions, exp_type='minimization'):
+def write_aggressions(config, repeat, aggressions, exp_type='minimization', seed_size=5594):
     """
     Writes one line in a csv. It refers to aggression scores per snapshot.
     :param exp_type: type of experiment
     :param config: the configuration
     :param repeat: the repeat of the experiment
     :param aggressions: a list of aggression scores per snapshot
+    :param seed_size: the size of the initial seed set
     """
-    filename = 'snapshots/{}/{}/{}/total_aggressions.csv'.format(exp_type, config, repeat)
+    filename = 'snapshots/{}/{}/{}/{}/total_aggressions.csv'.format(exp_type, seed_size, config, repeat)
 
     if os.path.exists(filename):
         os.remove(filename)

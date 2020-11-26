@@ -21,19 +21,19 @@ def run_experiment(g: nx.DiGraph, args, instance: int):
     g = utility.insert_aggression(g)
 
     # negative seeds are selected according to the best strategy of aggression modeling phase
-    negative_seeds = seed_selection.single_discount(g, 5594)
+    negative_seeds = seed_selection.single_discount(g, args.seedsize)
 
     # Determine the seed selection strategy for positive seeds
     if args.strategy == 'aa':
         positive_seeds = seed_selection.all_aggressive(g)
     elif args.strategy == 'ta':
-        positive_seeds = seed_selection.top_aggressive(g, 5594)
+        positive_seeds = seed_selection.top_aggressive(g, args.seedsize)
     elif args.strategy == 'sd':
-        positive_seeds = seed_selection.single_discount(g, 5594)
+        positive_seeds = seed_selection.single_discount(g, args.seedsize)
     elif args.strategy == 'dd':
-        positive_seeds = seed_selection.degree_discount(g, 5594)
+        positive_seeds = seed_selection.degree_discount(g, args.seedsize)
     else:
-        positive_seeds = seed_selection.random(g, 5594)
+        positive_seeds = seed_selection.random(g, args.seedsize)
 
     if args.model == 'ic':
         n_activated, p_activated, agg_scores = run_ic(g, negative_seeds, positive_seeds, args, instance)
@@ -83,6 +83,7 @@ if __name__ == '__main__':
                                                    " the best configuration found during the author's experimental process. If this needs to be changed, the code has to be altered")
     simulation_parser.add_argument("graph", type=str, help="Path to graph pickle file")
     simulation_parser.add_argument("snapshot", type=bool, help='If True, apart from the first and last step, it will create intermediate snapshots during the process')
+    simulation_parser.add_argument("seedsize", type=int, help="Seed set size. It is the number of initial infected nodes. Same for both positive and negative cascade. 5594 is the total number of aggressive users")
     simulation_parser.add_argument("strategy", type=str, choices=['r', 'aa', 'sd', 'dd'], help="Seed node selection strategy. Short names for 'Random', 'All aggressive', 'Single Discount' and 'Degree Discount'")
 
     simulation_parser.add_argument("model", type=str, choices=['ic', 'lt'], help="The diffusion model both for positive and negative cascade")
@@ -100,6 +101,4 @@ if __name__ == '__main__':
     if args.mode == 'simulation':
         experiment(args, True)
     elif args.mode == 'metric':
-        at = args.aggression_threshold
-        mt = args.metric_type
-        calc_metrics(at, 'minimization', mt)
+        calc_metrics(args, 'minimization')

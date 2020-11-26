@@ -15,7 +15,6 @@ def calculate_thresholds(graph, threshold):
     node_thresholds = dict()
 
     if type(threshold) == str:
-        assert threshold == 'aggression' or threshold == 'power', "Threshold options: ['aggression', 'power', 'random']"
 
         if threshold == 'aggression':
             print('Using aggression scores as thresholds')
